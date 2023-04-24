@@ -1,0 +1,32 @@
+depsversion = "0.0.0"
+
+name = "piot/rectify-c"
+version = "0.0.0"
+
+[[dependencies]]
+name = "piot/transmute-c"
+version = "*"
+
+[[dependencies]]
+name = "piot/nimble-steps-c"
+version = "*"
+
+[[dependencies]]
+name = "piot/nimble-steps-serialize-c"
+version = "*"
+
+[[dependencies]]
+name = "piot/imprint"
+version = "*"
+
+[[dependencies]]
+name = "piot/monotonic-time-c"
+version = "*"
+
+[[dependencies]]
+name = "piot/seer-c"
+version = "*"
+
+[[dependencies]]
+name = "piot/assent-c"
+version = "*"
