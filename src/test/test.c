@@ -115,12 +115,6 @@ UTEST(Assent, verify)
 
     ImprintAllocator* allocator = &imprint.slabAllocator.info.allocator;
 
-    Clog subLog;
-    subLog.constantPrefix = "rectify";
-    subLog.config = &g_clog;
-    rectifyInit(&rectify, authoritativeTransmuteVm, predictedTransmuteVm, allocator, 128, 32, subLog);
-
-
 
     AppSpecificState initialAppState;
     initialAppState.time = 0;
@@ -132,9 +126,35 @@ UTEST(Assent, verify)
 
     StepId initialStepId = {101};
 
-    rectifySetAuthoritativeState(&rectify, initialTransmuteState, initialStepId);
+    Clog subLog;
+    subLog.constantPrefix = "rectify";
+    subLog.config = &g_clog;
+
+    RectifySetup rectifySetup;
+    rectifySetup.allocator = allocator;
+    rectifySetup.maxInputOctetSize = 128;
+    rectifySetup.maxPlayerCount = 32;
+    rectifySetup.log = subLog;
+    rectifyInit(&rectify, authoritativeTransmuteVm, predictedTransmuteVm, rectifySetup, initialTransmuteState, initialStepId);
+
+
 
     rectifyUpdate(&rectify);
+
+
+    AppSpecificParticipantInput gameInput;
+    gameInput.horizontalAxis = 24;
+
+    TransmuteInput transmuteInput;
+    TransmuteParticipantInput participantInputs[1];
+    participantInputs[0].input = &gameInput;
+    participantInputs[0].octetSize = sizeof(gameInput);
+
+    transmuteInput.participantInputs = participantInputs;
+    transmuteInput.participantCount = 1;
+
+    rectifyAddAuthoritativeStep(&rectify, &transmuteInput, initialStepId);
+
     /*
 
 
@@ -172,7 +192,7 @@ UTEST(Assent, verify)
         TransmuteState currentState = seerGetState(&seer, &expectedStepId);
         const AppSpecificState* currentAppState = (const AppSpecificState*) currentState.state;
 
-        ASSERT_EQ(initialStepId + 1, expectedStepId);
+
         ASSERT_EQ(1, currentAppState->x);
         ASSERT_EQ(1, currentAppState->time);
         */

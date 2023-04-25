@@ -11,17 +11,21 @@
 typedef struct Rectify {
     Seer predicted;
     Assent authoritative;
-    NbsSteps authoritativeSteps;
     Clog log;
-    size_t maxPredictionTicksFromAuthoritative;
     char prefixAuthoritative[32];
     char prefixPredicted[32];
 } Rectify;
 
-void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predictVm, struct ImprintAllocator* allocator,
-                 size_t maxInputOctetSize, size_t maxPlayerCount, Clog log);
+typedef struct RectifySetup {
+    struct ImprintAllocator* allocator;
+    size_t maxInputOctetSize;
+    size_t maxPlayerCount;
+    Clog log;
+} RectifySetup;
 
+void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predictVm, RectifySetup setup, TransmuteState state, StepId stepId);
 void rectifyUpdate(Rectify* self);
-void rectifySetAuthoritativeState(Rectify* self, TransmuteState authoritativeState, StepId tickId);
+int rectifyAddAuthoritativeStep(Rectify* self, const TransmuteInput* input, StepId tickId);
+int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* input, StepId tickId);
 
 #endif
