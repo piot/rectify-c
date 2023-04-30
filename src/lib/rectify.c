@@ -15,9 +15,10 @@ void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predict
     AssentSetup assentSetup;
 
     assentSetup.allocator = setup.allocator;
-    assentSetup.maxInputOctetSize = setup.maxInputOctetSize;
-    assentSetup.maxPlayers =setup.maxPlayerCount;
+    assentSetup.maxStepOctetSizeForSingleParticipant = setup.maxStepOctetSizeForSingleParticipant;
+    assentSetup.maxPlayers = setup.maxPlayerCount;
     assentSetup.log = authSubLog;
+    assentSetup.maxTicksPerRead = 20;
 
     assentInit(&self->authoritative, authoritativeVm, assentSetup, state, stepId);
 
@@ -29,10 +30,9 @@ void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predict
 
     SeerSetup seerSetup;
     seerSetup.maxPlayers = setup.maxPlayerCount;
-    seerSetup.maxInputOctetSize = setup.maxInputOctetSize;
+    seerSetup.maxStepOctetSizeForSingleParticipant = setup.maxStepOctetSizeForSingleParticipant;
     seerSetup.allocator = setup.allocator;
-    seerSetup.maxTicksPerRead = 10;
-    seerSetup.maxTicksFromAuthoritative = 20;
+    seerSetup.maxTicksFromAuthoritative = 15;
     seerSetup.log = seerSubLog;
 
     seerInit(&self->predicted, predictVm, seerSetup, state, stepId);
@@ -79,17 +79,20 @@ void rectifyUpdate(Rectify* self)
     if (self->authoritative.authoritativeSteps.stepsCount == 0) {
         StepId authoritativeTickId;
         TransmuteState authoritativeTransmuteState = assentGetState(&self->authoritative, &authoritativeTickId);
+        CLOG_C_NOTICE(&self->log, "we have a new truth at %04X, set it to seer (which was at %04X) and starts predicting our future", authoritativeTickId, self->predicted.stepId)
         // seerSetState discards all predicted inputs before the `authoritativeTickId`
         seerSetState(&self->predicted, authoritativeTransmuteState, authoritativeTickId);
     }
 
     if (!self->predicted.transmuteVm.initialStateIsSet) {
+        CLOG_C_NOTICE(&self->log, "we have not established a truth, waiting for that")
         // We are not working on a prediction, so just return
         return;
     }
 
     if (self->predicted.predictedSteps.stepsCount == 0) {
         // We have no more predictions at this time
+        CLOG_C_NOTICE(&self->log, "we have not predicted steps at %04X (%04X), so can not advance the prediction", self->predicted.stepId, self->authoritative.stepId)
         return;
     }
 
@@ -107,7 +110,9 @@ void rectifyUpdate(Rectify* self)
 
     // We need to continue our ongoing prediction, up to the number of predicted inputs or the maximum prediction ticks
     // that are allowed
+    CLOG_C_NOTICE(&self->log, "we can ask seer to predict the future from %04X", self->predicted.stepId)
     seerUpdate(&self->predicted);
+    CLOG_C_NOTICE(&self->log, "new prediction at %04X", self->predicted.stepId)
 }
 
 int rectifyAddAuthoritativeStep(Rectify* self, const TransmuteInput* input, StepId tickId)
@@ -115,7 +120,17 @@ int rectifyAddAuthoritativeStep(Rectify* self, const TransmuteInput* input, Step
     return assentAddAuthoritativeStep(&self->authoritative, input, tickId);
 }
 
+int rectifyAddAuthoritativeStepRaw(Rectify* self, const uint8_t* combinedStep, size_t octetCount, StepId tickId)
+{
+    return assentAddAuthoritativeStepRaw(&self->authoritative, combinedStep, octetCount, tickId);
+}
+
 int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* input, StepId tickId)
 {
     return seerAddPredictedStep(&self->predicted, input, tickId);
+}
+
+int rectifyAddPredictedStepRaw(Rectify* self, const uint8_t* combinedStep, size_t octetCount, StepId tickId)
+{
+    return seerAddPredictedStepRaw(&self->predicted, combinedStep, octetCount, tickId);
 }
