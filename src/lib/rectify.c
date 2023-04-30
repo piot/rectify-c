@@ -92,7 +92,7 @@ void rectifyUpdate(Rectify* self)
 
     if (self->predicted.predictedSteps.stepsCount == 0) {
         // We have no more predictions at this time
-        CLOG_C_NOTICE(&self->log, "we have not predicted steps at %04X (%04X), so can not advance the prediction", self->predicted.stepId, self->authoritative.stepId)
+        CLOG_C_NOTICE(&self->log, "we have no predicted steps remaining at %04X (%04X), so can not advance the prediction", self->predicted.stepId, self->authoritative.stepId)
         return;
     }
 

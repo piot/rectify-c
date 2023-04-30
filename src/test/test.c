@@ -132,7 +132,7 @@ UTEST(Assent, verify)
 
     RectifySetup rectifySetup;
     rectifySetup.allocator = allocator;
-    rectifySetup.maxInputOctetSize = 128;
+    rectifySetup.maxStepOctetSizeForSingleParticipant = 5;
     rectifySetup.maxPlayerCount = 32;
     rectifySetup.log = subLog;
     rectifyInit(&rectify, authoritativeTransmuteVm, predictedTransmuteVm, rectifySetup, initialTransmuteState, initialStepId);
@@ -149,6 +149,7 @@ UTEST(Assent, verify)
     TransmuteParticipantInput participantInputs[1];
     participantInputs[0].input = &gameInput;
     participantInputs[0].octetSize = sizeof(gameInput);
+    participantInputs[0].participantId = 1;
 
     transmuteInput.participantInputs = participantInputs;
     transmuteInput.participantCount = 1;
