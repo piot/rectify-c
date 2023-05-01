@@ -56,6 +56,7 @@ void rectifyUpdate(Rectify* self)
     }
      */
 
+    bool hadAuthoritativeStepsBeforeUpdate = self->authoritative.authoritativeSteps.stepsCount > 0;
     // Try to advance the authoritative steps as far as possible
     assentUpdate(&self->authoritative);
 
@@ -76,23 +77,23 @@ void rectifyUpdate(Rectify* self)
 
     // Everytime we have consumed *all* the knowledge about the truth, we should update our predictions
     // or if we don't have any predictions at all, then it is time to set a prediction
-    if (self->authoritative.authoritativeSteps.stepsCount == 0) {
+    if (hadAuthoritativeStepsBeforeUpdate && self->authoritative.authoritativeSteps.stepsCount == 0) {
         StepId authoritativeTickId;
         TransmuteState authoritativeTransmuteState = assentGetState(&self->authoritative, &authoritativeTickId);
-        CLOG_C_NOTICE(&self->log, "we have a new truth at %04X, set it to seer (which was at %04X) and starts predicting our future", authoritativeTickId, self->predicted.stepId)
+        CLOG_C_VERBOSE(&self->log, "we have a new truth at %04X, set it to seer (which was at %04X) and starts predicting our future", authoritativeTickId, self->predicted.stepId)
         // seerSetState discards all predicted inputs before the `authoritativeTickId`
         seerSetState(&self->predicted, authoritativeTransmuteState, authoritativeTickId);
     }
 
     if (!self->predicted.transmuteVm.initialStateIsSet) {
-        CLOG_C_NOTICE(&self->log, "we have not established a truth, waiting for that")
+        CLOG_C_VERBOSE(&self->log, "we have not established a truth, waiting for that")
         // We are not working on a prediction, so just return
         return;
     }
 
     if (self->predicted.predictedSteps.stepsCount == 0) {
         // We have no more predictions at this time
-        CLOG_C_NOTICE(&self->log, "we have no predicted steps remaining at %04X (%04X), so can not advance the prediction", self->predicted.stepId, self->authoritative.stepId)
+        CLOG_C_VERBOSE(&self->log, "we have no predicted steps remaining at %04X (%04X), so can not advance the prediction", self->predicted.stepId, self->authoritative.stepId)
         return;
     }
 
@@ -110,9 +111,9 @@ void rectifyUpdate(Rectify* self)
 
     // We need to continue our ongoing prediction, up to the number of predicted inputs or the maximum prediction ticks
     // that are allowed
-    CLOG_C_NOTICE(&self->log, "we can ask seer to predict the future from %04X", self->predicted.stepId)
+    CLOG_C_VERBOSE(&self->log, "we can ask seer to predict the future from %04X", self->predicted.stepId)
     seerUpdate(&self->predicted);
-    CLOG_C_NOTICE(&self->log, "new prediction at %04X", self->predicted.stepId)
+    CLOG_C_VERBOSE(&self->log, "new prediction at %04X", self->predicted.stepId)
 }
 
 int rectifyAddAuthoritativeStep(Rectify* self, const TransmuteInput* input, StepId tickId)
