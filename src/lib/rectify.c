@@ -4,16 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 #include <rectify/rectify.h>
 
-void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predictVm, RectifySetup setup, TransmuteState state, StepId stepId)
+void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predictVm, RectifySetup setup,
+                 TransmuteState state, StepId stepId)
 {
     tc_snprintf(self->prefixAuthoritative, 32, "%s/Authoritative", setup.log.constantPrefix);
     Clog authSubLog;
     authSubLog.config = setup.log.config;
     authSubLog.constantPrefix = self->prefixAuthoritative;
 
-
     AssentSetup assentSetup;
-
     assentSetup.allocator = setup.allocator;
     assentSetup.maxStepOctetSizeForSingleParticipant = setup.maxStepOctetSizeForSingleParticipant;
     assentSetup.maxPlayers = setup.maxPlayerCount;
@@ -26,7 +25,6 @@ void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predict
     Clog seerSubLog;
     seerSubLog.config = setup.log.config;
     seerSubLog.constantPrefix = self->prefixPredicted;
-
 
     SeerSetup seerSetup;
     seerSetup.maxPlayers = setup.maxPlayerCount;
@@ -60,7 +58,6 @@ void rectifyUpdate(Rectify* self)
     // Try to advance the authoritative steps as far as possible
     assentUpdate(&self->authoritative);
 
-
     if (self->authoritative.authoritativeSteps.stepsCount != 0) {
         StepId firstStepId;
         bool didHaveAtLeastOneStep = nbsStepsPeek(&self->authoritative.authoritativeSteps, &firstStepId);
@@ -80,7 +77,10 @@ void rectifyUpdate(Rectify* self)
     if (hadAuthoritativeStepsBeforeUpdate && self->authoritative.authoritativeSteps.stepsCount == 0) {
         StepId authoritativeTickId;
         TransmuteState authoritativeTransmuteState = assentGetState(&self->authoritative, &authoritativeTickId);
-        CLOG_C_VERBOSE(&self->log, "we have a new truth at %04X, set it to seer (which was at %04X) and starts predicting our future", authoritativeTickId, self->predicted.stepId)
+        CLOG_C_VERBOSE(
+            &self->log,
+            "we have a new truth at %04X, set it to seer (which was at %04X) and starts predicting our future",
+            authoritativeTickId, self->predicted.stepId)
         // seerSetState discards all predicted inputs before the `authoritativeTickId`
         seerSetState(&self->predicted, authoritativeTransmuteState, authoritativeTickId);
     }
@@ -93,7 +93,9 @@ void rectifyUpdate(Rectify* self)
 
     if (self->predicted.predictedSteps.stepsCount == 0) {
         // We have no more predictions at this time
-        CLOG_C_VERBOSE(&self->log, "we have no predicted steps remaining at %04X (%04X), so can not advance the prediction", self->predicted.stepId, self->authoritative.stepId)
+        CLOG_C_VERBOSE(&self->log,
+                       "we have no predicted steps remaining at %04X (%04X), so can not advance the prediction",
+                       self->predicted.stepId, self->authoritative.stepId)
         return;
     }
 
