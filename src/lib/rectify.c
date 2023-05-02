@@ -32,7 +32,7 @@ void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predict
     seerSetup.maxPlayers = setup.maxPlayerCount;
     seerSetup.maxStepOctetSizeForSingleParticipant = setup.maxStepOctetSizeForSingleParticipant;
     seerSetup.allocator = setup.allocator;
-    seerSetup.maxTicksFromAuthoritative = 15;
+    seerSetup.maxTicksFromAuthoritative = setup.maxTicksFromAuthoritative;
     seerSetup.log = seerSubLog;
 
     seerInit(&self->predicted, predictVm, seerSetup, state, stepId);
@@ -113,7 +113,7 @@ void rectifyUpdate(Rectify* self)
     // that are allowed
     CLOG_C_VERBOSE(&self->log, "we can ask seer to predict the future from %04X", self->predicted.stepId)
     seerUpdate(&self->predicted);
-    CLOG_C_VERBOSE(&self->log, "new prediction at %04X", self->predicted.stepId)
+    CLOG_C_VERBOSE(&self->log, "new prediction from seer at %04X", self->predicted.stepId)
 }
 
 int rectifyAddAuthoritativeStep(Rectify* self, const TransmuteInput* input, StepId tickId)

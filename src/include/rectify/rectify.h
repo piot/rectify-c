@@ -19,6 +19,7 @@ typedef struct Rectify {
 typedef struct RectifySetup {
     struct ImprintAllocator* allocator;
     size_t maxStepOctetSizeForSingleParticipant;
+    size_t maxTicksFromAuthoritative;
     size_t maxPlayerCount;
     Clog log;
 } RectifySetup;
