@@ -2,6 +2,7 @@
  *  Copyright (c) Peter Bjorklund. All rights reserved.
  *  Licensed under the MIT License. See LICENSE in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
+#include "imprint/allocator.h"
 #include <rectify/rectify.h>
 
 void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predictVm, RectifySetup setup,
@@ -34,6 +35,10 @@ void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predict
     seerSetup.log = seerSubLog;
 
     seerInit(&self->predicted, predictVm, seerSetup, state, stepId);
+
+    self->buildComposedPredictedInput.participantInputs = IMPRINT_ALLOC_TYPE_COUNT(
+        setup.allocator, TransmuteParticipantInput, setup.maxPlayerCount);
+    self->buildComposedPredictedInput.participantCount = 0;
 
     self->log = setup.log;
 }
@@ -94,7 +99,7 @@ void rectifyUpdate(Rectify* self)
     if (self->predicted.predictedSteps.stepsCount == 0) {
         // We have no more predictions at this time
         CLOG_C_VERBOSE(&self->log,
-                       "we have no predicted steps remaining at %04X (%04X), so can not advance the prediction",
+                       "we have no predicted steps remaining at %08X (%08X), so can not advance the prediction",
                        self->predicted.stepId, self->authoritative.stepId)
         return;
     }
@@ -128,12 +133,48 @@ int rectifyAddAuthoritativeStepRaw(Rectify* self, const uint8_t* combinedStep, s
     return assentAddAuthoritativeStepRaw(&self->authoritative, combinedStep, octetCount, tickId);
 }
 
-int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* input, StepId tickId)
+bool rectifyMustAddPredictedStepThisTick(const Rectify* self)
 {
-    return seerAddPredictedStep(&self->predicted, input, tickId);
+    return seerShouldAddPredictedStepThisTick(&self->predicted);
 }
 
-int rectifyAddPredictedStepRaw(Rectify* self, const uint8_t* combinedStep, size_t octetCount, StepId tickId)
+int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput, StepId tickId)
 {
-    return seerAddPredictedStepRaw(&self->predicted, combinedStep, octetCount, tickId);
+    self->buildComposedPredictedInput = self->authoritative.lastTransmuteInput;
+    const TransmuteInput* lastAuthoritativeInput = &self->authoritative.lastTransmuteInput;
+    for (size_t i = 0; i < lastAuthoritativeInput->participantCount; ++i) {
+        const TransmuteParticipantInput* authoritativeParticipant = &lastAuthoritativeInput->participantInputs[i];
+        int foundInPredicted = transmuteInputFindParticipantId(predictedInput, authoritativeParticipant->participantId);
+        if (foundInPredicted < 0) {
+            // Set zero input for remote participants
+            self->buildComposedPredictedInput.participantInputs[i].octetSize = 0;
+            self->buildComposedPredictedInput.participantInputs[i].input = 0;
+        } else {
+            self->buildComposedPredictedInput.participantInputs[i]
+                .octetSize = predictedInput->participantInputs[foundInPredicted].octetSize;
+            self->buildComposedPredictedInput.participantInputs[i]
+                .input = predictedInput->participantInputs[foundInPredicted].input;
+        }
+    }
+
+    for (size_t i = 0; i < predictedInput->participantCount; ++i) {
+        const TransmuteParticipantInput* predictedParticipant = &predictedInput->participantInputs[i];
+        int foundInAuthoritative = transmuteInputFindParticipantId(&self->authoritative.lastTransmuteInput,
+                                                                   predictedParticipant->participantId);
+        if (foundInAuthoritative < 0) {
+            // It was not found in authoritative, we predict that we have joined then
+            int index = self->buildComposedPredictedInput.participantCount++;
+            TransmuteParticipantInput* newParticipantInput = &self->buildComposedPredictedInput.participantInputs[index];
+            newParticipantInput->input = predictedParticipant->input;
+            newParticipantInput->octetSize = predictedParticipant->octetSize;
+            newParticipantInput->participantId = predictedParticipant->participantId;
+        }
+    }
+
+    if (self->buildComposedPredictedInput.participantCount == 0) {
+        CLOG_C_NOTICE(&self->log, "can not predict yet, need to get some authoritative first")
+        return 0;
+    }
+
+    return seerAddPredictedStep(&self->predicted, &self->buildComposedPredictedInput, tickId);
 }

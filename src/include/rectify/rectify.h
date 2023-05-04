@@ -11,6 +11,7 @@
 typedef struct Rectify {
     Seer predicted;
     Assent authoritative;
+    TransmuteInput buildComposedPredictedInput;
     Clog log;
     char prefixAuthoritative[32];
     char prefixPredicted[32];
@@ -27,8 +28,9 @@ typedef struct RectifySetup {
 void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predictVm, RectifySetup setup, TransmuteState state, StepId stepId);
 void rectifyUpdate(Rectify* self);
 int rectifyAddAuthoritativeStep(Rectify* self, const TransmuteInput* input, StepId tickId);
-int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* input, StepId tickId);
 int rectifyAddAuthoritativeStepRaw(Rectify* self, const uint8_t* combinedStep, size_t octetCount, StepId tickId);
-int rectifyAddPredictedStepRaw(Rectify* self, const uint8_t* combinedStep, size_t octetCount, StepId tickId);
+
+bool rectifyMustAddPredictedStepThisTick(const Rectify* self);
+int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* input, StepId tickId);
 
 #endif
