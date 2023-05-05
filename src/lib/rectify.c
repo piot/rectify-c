@@ -18,7 +18,7 @@ void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predict
     assentSetup.maxStepOctetSizeForSingleParticipant = setup.maxStepOctetSizeForSingleParticipant;
     assentSetup.maxPlayers = setup.maxPlayerCount;
     assentSetup.log = authSubLog;
-    assentSetup.maxTicksPerRead = 20;
+    assentSetup.maxTicksPerRead = 10u;
 
     assentInit(&self->authoritative, authoritativeVm, assentSetup, state, stepId);
 
@@ -59,7 +59,7 @@ void rectifyUpdate(Rectify* self)
     }
      */
 
-    bool hadAuthoritativeStepsBeforeUpdate = self->authoritative.authoritativeSteps.stepsCount > 0;
+    int authoritativeStepCountBeforeUpdate = self->authoritative.authoritativeSteps.stepsCount;
     // Try to advance the authoritative steps as far as possible
     assentUpdate(&self->authoritative);
 
@@ -73,13 +73,13 @@ void rectifyUpdate(Rectify* self)
         CLOG_C_NOTICE(&self->log,
                       "still trying to catch up to a complete authoritative state, couldn't advance through all steps "
                       "this update, hopefully catching up "
-                      "next update() %04X (%zu count)",
-                      firstStepId, self->authoritative.authoritativeSteps.stepsCount)
+                      "next update() %04X (%zu count now and %zu before. max %zu ticks/update)",
+                      firstStepId, self->authoritative.authoritativeSteps.stepsCount, authoritativeStepCountBeforeUpdate, self->authoritative.maxTicksPerRead)
     }
 
     // Everytime we have consumed *all* the knowledge about the truth, we should update our predictions
     // or if we don't have any predictions at all, then it is time to set a prediction
-    if (hadAuthoritativeStepsBeforeUpdate && self->authoritative.authoritativeSteps.stepsCount == 0) {
+    if (authoritativeStepCountBeforeUpdate > 0 && self->authoritative.authoritativeSteps.stepsCount == 0) {
         StepId authoritativeTickId;
         TransmuteState authoritativeTransmuteState = assentGetState(&self->authoritative, &authoritativeTickId);
         CLOG_C_VERBOSE(
