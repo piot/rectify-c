@@ -73,7 +73,7 @@ void rectifyUpdate(Rectify* self)
         CLOG_C_NOTICE(&self->log,
                       "still trying to catch up to a complete authoritative state, couldn't advance through all steps "
                       "this update, hopefully catching up "
-                      "next update() %04X (%zu count now and %zu before. max %zu ticks/update)",
+                      "next update() %04X (%zu count now and %d before. max %zu ticks/update)",
                       firstStepId, self->authoritative.authoritativeSteps.stepsCount, authoritativeStepCountBeforeUpdate, self->authoritative.maxTicksPerRead)
     }
 
