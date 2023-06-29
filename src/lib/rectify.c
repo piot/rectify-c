@@ -59,7 +59,7 @@ void rectifyUpdate(Rectify* self)
     }
      */
 
-    int authoritativeStepCountBeforeUpdate = self->authoritative.authoritativeSteps.stepsCount;
+    size_t authoritativeStepCountBeforeUpdate = self->authoritative.authoritativeSteps.stepsCount;
     // Try to advance the authoritative steps as far as possible
     assentUpdate(&self->authoritative);
 
@@ -73,7 +73,7 @@ void rectifyUpdate(Rectify* self)
         CLOG_C_NOTICE(&self->log,
                       "still trying to catch up to a complete authoritative state, couldn't advance through all steps "
                       "this update, hopefully catching up "
-                      "next update() %04X (%zu count now and %d before. max %zu ticks/update)",
+                      "next update() %04X (%zu count now and %zd before. max %zu ticks/update)",
                       firstStepId, self->authoritative.authoritativeSteps.stepsCount, authoritativeStepCountBeforeUpdate, self->authoritative.maxTicksPerRead)
     }
 
@@ -123,7 +123,7 @@ void rectifyUpdate(Rectify* self)
     CLOG_C_VERBOSE(&self->log, "new prediction from seer at %04X", self->predicted.stepId)
 }
 
-int rectifyAddAuthoritativeStep(Rectify* self, const TransmuteInput* input, StepId tickId)
+ssize_t rectifyAddAuthoritativeStep(Rectify* self, const TransmuteInput* input, StepId tickId)
 {
     return assentAddAuthoritativeStep(&self->authoritative, input, tickId);
 }
@@ -163,7 +163,7 @@ int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput,
                                                                    predictedParticipant->participantId);
         if (foundInAuthoritative < 0) {
             // It was not found in authoritative, we predict that we have joined then
-            int index = self->buildComposedPredictedInput.participantCount++;
+            size_t index = self->buildComposedPredictedInput.participantCount++;
             TransmuteParticipantInput* newParticipantInput = &self->buildComposedPredictedInput.participantInputs[index];
             newParticipantInput->input = predictedParticipant->input;
             newParticipantInput->octetSize = predictedParticipant->octetSize;
