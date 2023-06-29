@@ -13,3 +13,5 @@ Makefile
 *.a
 *.cmake
 CMakeCache.txt
+src/test/rectify_test
+src/temp.zip

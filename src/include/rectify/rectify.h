@@ -27,7 +27,7 @@ typedef struct RectifySetup {
 
 void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predictVm, RectifySetup setup, TransmuteState state, StepId stepId);
 void rectifyUpdate(Rectify* self);
-int rectifyAddAuthoritativeStep(Rectify* self, const TransmuteInput* input, StepId tickId);
+ssize_t rectifyAddAuthoritativeStep(Rectify* self, const TransmuteInput* input, StepId tickId);
 int rectifyAddAuthoritativeStepRaw(Rectify* self, const uint8_t* combinedStep, size_t octetCount, StepId tickId);
 
 bool rectifyMustAddPredictedStepThisTick(const Rectify* self);
