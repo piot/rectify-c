@@ -8,6 +8,7 @@
 void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predictVm, RectifySetup setup,
                  TransmuteState state, StepId stepId)
 {
+    self->log = setup.log;
     tc_snprintf(self->prefixAuthoritative, 32, "%s/Authoritative", setup.log.constantPrefix);
     Clog authSubLog;
     authSubLog.config = setup.log.config;
@@ -36,11 +37,10 @@ void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predict
 
     seerInit(&self->predicted, predictVm, seerSetup, state, stepId);
 
+    CLOG_C_NOTICE(&self->log, "prepare memory for build composed max player count: %zu", setup.maxPlayerCount)
     self->buildComposedPredictedInput.participantInputs = IMPRINT_ALLOC_TYPE_COUNT(
         setup.allocator, TransmuteParticipantInput, setup.maxPlayerCount);
     self->buildComposedPredictedInput.participantCount = 0;
-
-    self->log = setup.log;
 }
 
 void rectifyUpdate(Rectify* self)
@@ -74,7 +74,8 @@ void rectifyUpdate(Rectify* self)
                       "still trying to catch up to a complete authoritative state, couldn't advance through all steps "
                       "this update, hopefully catching up "
                       "next update() %04X (%zu count now and %zd before. max %zu ticks/update)",
-                      firstStepId, self->authoritative.authoritativeSteps.stepsCount, authoritativeStepCountBeforeUpdate, self->authoritative.maxTicksPerRead)
+                      firstStepId, self->authoritative.authoritativeSteps.stepsCount,
+                      authoritativeStepCountBeforeUpdate, self->authoritative.maxTicksPerRead)
     }
 
     // Everytime we have consumed *all* the knowledge about the truth, we should update our predictions
@@ -140,6 +141,12 @@ bool rectifyMustAddPredictedStepThisTick(const Rectify* self)
 
 int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput, StepId tickId)
 {
+    if (predictedInput->participantCount > self->buildComposedPredictedInput.participantCount) {
+        CLOG_C_SOFT_ERROR(&self->log, "more input than was prepared for predictedInput:%zu, buildComposed:%zu",
+                        predictedInput->participantCount, self->buildComposedPredictedInput.participantCount)
+        return -1;
+    }
+
     self->buildComposedPredictedInput = self->authoritative.lastTransmuteInput;
     const TransmuteInput* lastAuthoritativeInput = &self->authoritative.lastTransmuteInput;
     for (size_t i = 0; i < lastAuthoritativeInput->participantCount; ++i) {
@@ -164,7 +171,8 @@ int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput,
         if (foundInAuthoritative < 0) {
             // It was not found in authoritative, we predict that we have joined then
             size_t index = self->buildComposedPredictedInput.participantCount++;
-            TransmuteParticipantInput* newParticipantInput = &self->buildComposedPredictedInput.participantInputs[index];
+            TransmuteParticipantInput* newParticipantInput = &self->buildComposedPredictedInput
+                                                                  .participantInputs[index];
             newParticipantInput->input = predictedParticipant->input;
             newParticipantInput->octetSize = predictedParticipant->octetSize;
             newParticipantInput->participantId = predictedParticipant->participantId;
