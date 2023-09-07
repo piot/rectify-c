@@ -142,8 +142,8 @@ bool rectifyMustAddPredictedStepThisTick(const Rectify* self)
 int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput, StepId tickId)
 {
     if (predictedInput->participantCount > self->buildComposedPredictedInput.participantCount) {
-        CLOG_C_SOFT_ERROR(&self->log, "more input than was prepared for predictedInput:%zu, buildComposed:%zu",
-                        predictedInput->participantCount, self->buildComposedPredictedInput.participantCount)
+       // CLOG_C_SOFT_ERROR(&self->log, "more input than was prepared for predictedInput:%zu, buildComposed:%zu",
+         //               predictedInput->participantCount, self->buildComposedPredictedInput.participantCount)
         return -1;
     }
 
