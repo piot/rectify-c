@@ -40,7 +40,7 @@ void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predict
     CLOG_C_NOTICE(&self->log, "prepare memory for build composed max player count: %zu", setup.maxPlayerCount)
     self->buildComposedPredictedInput.participantInputs = IMPRINT_ALLOC_TYPE_COUNT(
         setup.allocator, TransmuteParticipantInput, setup.maxPlayerCount);
-    self->buildComposedPredictedInput.participantCount = 0;
+    self->buildComposedPredictedInput.participantCount = setup.maxPlayerCount;
 }
 
 void rectifyUpdate(Rectify* self)
@@ -142,8 +142,8 @@ bool rectifyMustAddPredictedStepThisTick(const Rectify* self)
 int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput, StepId tickId)
 {
     if (predictedInput->participantCount > self->buildComposedPredictedInput.participantCount) {
-       // CLOG_C_SOFT_ERROR(&self->log, "more input than was prepared for predictedInput:%zu, buildComposed:%zu",
-         //               predictedInput->participantCount, self->buildComposedPredictedInput.participantCount)
+        CLOG_C_SOFT_ERROR(&self->log, "more input than was prepared for predictedInput:%zu, buildComposed:%zu",
+                        predictedInput->participantCount, self->buildComposedPredictedInput.participantCount)
         return -1;
     }
 
