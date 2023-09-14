@@ -19,7 +19,7 @@ void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predict
     assentSetup.maxStepOctetSizeForSingleParticipant = setup.maxStepOctetSizeForSingleParticipant;
     assentSetup.maxPlayers = setup.maxPlayerCount;
     assentSetup.log = authSubLog;
-    assentSetup.maxTicksPerRead = 10u;
+    assentSetup.maxTicksPerRead = 20u;
 
     assentInit(&self->authoritative, authoritativeVm, assentSetup, state, stepId);
 
