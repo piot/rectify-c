@@ -8,13 +8,32 @@
 #include <assent/assent.h>
 #include <seer/seer.h>
 
+
+typedef struct RectifyCallbackObjectVtbl {
+    AssentPreAuthoritativeTicksFn preAuthoritativeTicksFn;
+    AssentAuthoritativeTickFn authoritativeTickFn;
+    AssentDeserializeStateFn authoritativeDeserializeFn;
+
+    SeerPredictionCopyFromAuthoritativeFn copyFromAuthoritativeToPredictionFn;
+    SeerPredictionTickFn predictionTickFn;
+    SeerPredictionPostPredictionTicksFn postPredictionTicksFn;
+} RectifyCallbackObjectVtbl;
+
+typedef struct RectifyCallbackObject {
+    RectifyCallbackObjectVtbl* vtbl;
+    void* self;
+} RectifyCallbackObject;
+
 typedef struct Rectify {
+    SeerCallbackObjectVtbl seerCallbackVtbl;
+    AssentCallbackVtbl assentCallbackVtbl;
     Seer predicted;
     Assent authoritative;
     TransmuteInput buildComposedPredictedInput;
     Clog log;
     char prefixAuthoritative[32];
     char prefixPredicted[32];
+    bool authoritativeHasBeenCopiedToPrediction;
 } Rectify;
 
 typedef struct RectifySetup {
@@ -25,7 +44,7 @@ typedef struct RectifySetup {
     Clog log;
 } RectifySetup;
 
-void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predictVm, RectifySetup setup, TransmuteState state, StepId stepId);
+void rectifyInit(Rectify* self, RectifyCallbackObject callbackObject, RectifySetup setup, TransmuteState state, StepId stepId);
 void rectifyUpdate(Rectify* self);
 ssize_t rectifyAddAuthoritativeStep(Rectify* self, const TransmuteInput* input, StepId tickId);
 int rectifyAddAuthoritativeStepRaw(Rectify* self, const uint8_t* combinedStep, size_t octetCount, StepId tickId);

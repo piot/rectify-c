@@ -31,12 +31,9 @@ void appSpecificTick(void* _self, const TransmuteInput* input)
     if (input->participantCount > 0) {
         const AppSpecificParticipantInput* appSpecificInput = (AppSpecificParticipantInput*) input->participantInputs[0]
                                                                   .input;
-        if (appSpecificInput->horizontalAxis > 0) {
-            self->appSpecificState.x++;
-            CLOG_DEBUG("app: tick with input %d, walking to the right", appSpecificInput->horizontalAxis)
-        } else {
-            CLOG_DEBUG("app: tick with input %d, not walking to the right", appSpecificInput->horizontalAxis)
-        }
+        self->appSpecificState.x += appSpecificInput->horizontalAxis;
+        CLOG_DEBUG("app: tick with input %d, x:%d", appSpecificInput->horizontalAxis,
+                   self->appSpecificState.x)
     } else {
         CLOG_DEBUG("app: tick with no input")
     }
@@ -79,6 +76,55 @@ int appSpecificInputToString(void* _self, const TransmuteParticipantInput* input
     return tc_snprintf(target, maxTargetOctetSize, "input: horizontalAxis: %d", participantInput->horizontalAxis);
 }
 
+typedef struct AppSpecificCallback {
+    TransmuteVm* authoritative;
+    TransmuteVm* predicted;
+    TransmuteState cachedState;
+} AppSpecificCallback;
+
+void rectifyAuthoritativeDeserialize(void* _self, const TransmuteState* state)
+{
+    AppSpecificCallback* self = (AppSpecificCallback*) _self;
+    CLOG_INFO("deserialize into authoritative")
+    transmuteVmSetState(self->authoritative, state);
+}
+
+void rectifyAuthoritativeTick(void* _self, const TransmuteInput* input)
+{
+    AppSpecificCallback* self = (AppSpecificCallback*) _self;
+    CLOG_INFO("authoritative: tick")
+
+    transmuteVmTick(self->authoritative, input);
+}
+
+void rectifyCopyAuthoritative(void* _self, StepId stepId)
+{
+    AppSpecificCallback* self = (AppSpecificCallback*) _self;
+    self->cachedState = transmuteVmGetState(self->authoritative);
+    CLOG_INFO("copy authoritative to prediction")
+
+    transmuteVmSetState(self->predicted, &self->cachedState );
+}
+
+void rectifyPredictionTick(void* _self, const TransmuteInput* input)
+{
+    AppSpecificCallback* self = (AppSpecificCallback*) _self;
+    CLOG_INFO("predicted: tick")
+    transmuteVmTick(self->predicted, input);
+}
+
+void rectifyPostPredictionTick(void* _self)
+{
+    AppSpecificCallback* self = (AppSpecificCallback*) _self;
+    CLOG_INFO("predicted: post prediction")
+}
+
+void rectifyAuthoritativePreTicks(void* _self)
+{
+    AppSpecificCallback* self = (AppSpecificCallback*) _self;
+    CLOG_INFO("authoritative: pre ticks")
+}
+
 static TransmuteVm createVm(AppSpecificVm* vmPointer, const char* description)
 {
     TransmuteVm transmuteVm;
@@ -89,6 +135,9 @@ static TransmuteVm createVm(AppSpecificVm* vmPointer, const char* description)
     setup.getStateFn = appSpecificGetState;
     setup.inputToString = appSpecificInputToString;
     setup.stateToString = appSpecificStateToString;
+    setup.version.major = 0;
+    setup.version.minor = 0;
+    setup.version.patch = 0;
 
     Clog subLog;
 
@@ -100,7 +149,7 @@ static TransmuteVm createVm(AppSpecificVm* vmPointer, const char* description)
     return transmuteVm;
 }
 
-UTEST(Assent, verify)
+UTEST(Rectify, verify)
 {
     ImprintDefaultSetup imprint;
     imprintDefaultSetupInit(&imprint, 16 * 1024 * 1024);
@@ -114,7 +163,6 @@ UTEST(Assent, verify)
     Rectify rectify;
 
     ImprintAllocator* allocator = &imprint.slabAllocator.info.allocator;
-
 
     AppSpecificState initialAppState;
     initialAppState.time = 0;
@@ -130,31 +178,68 @@ UTEST(Assent, verify)
     subLog.constantPrefix = "rectify";
     subLog.config = &g_clog;
 
+    AppSpecificCallback appCallback = {.predicted = &predictedTransmuteVm, .authoritative = &authoritativeTransmuteVm};
+
+    RectifyCallbackObjectVtbl vtbl = {
+        .authoritativeDeserializeFn = rectifyAuthoritativeDeserialize,
+        .authoritativeTickFn = rectifyAuthoritativeTick,
+        .predictionTickFn = rectifyPredictionTick,
+        .postPredictionTicksFn = rectifyPostPredictionTick,
+        .preAuthoritativeTicksFn = rectifyAuthoritativePreTicks,
+        .copyFromAuthoritativeToPredictionFn = rectifyCopyAuthoritative,
+    };
+
+    RectifyCallbackObject rectifyCallbackObject = {.vtbl = &vtbl, .self = &appCallback};
+
     RectifySetup rectifySetup;
     rectifySetup.allocator = allocator;
     rectifySetup.maxStepOctetSizeForSingleParticipant = 5;
     rectifySetup.maxPlayerCount = 32;
+    rectifySetup.maxTicksFromAuthoritative = 16;
     rectifySetup.log = subLog;
-    rectifyInit(&rectify, authoritativeTransmuteVm, predictedTransmuteVm, rectifySetup, initialTransmuteState, initialStepId);
-
-
+    rectifyInit(&rectify, rectifyCallbackObject, rectifySetup, initialTransmuteState, initialStepId);
 
     rectifyUpdate(&rectify);
 
+    AppSpecificParticipantInput authoritativeGameInput;
+    authoritativeGameInput.horizontalAxis = 24;
 
-    AppSpecificParticipantInput gameInput;
-    gameInput.horizontalAxis = 24;
+    TransmuteInput authoritativeInput;
+    TransmuteParticipantInput authoritativeInputs[1];
+    authoritativeInputs[0].input = &authoritativeGameInput;
+    authoritativeInputs[0].octetSize = sizeof(authoritativeGameInput);
+    authoritativeInputs[0].participantId = 1;
+    authoritativeInputs[0].inputType = TransmuteParticipantInputTypeNormal;
 
-    TransmuteInput transmuteInput;
-    TransmuteParticipantInput participantInputs[1];
-    participantInputs[0].input = &gameInput;
-    participantInputs[0].octetSize = sizeof(gameInput);
-    participantInputs[0].participantId = 1;
+    authoritativeInput.participantInputs = authoritativeInputs;
+    authoritativeInput.participantCount = 1;
 
-    transmuteInput.participantInputs = participantInputs;
-    transmuteInput.participantCount = 1;
+    rectifyAddAuthoritativeStep(&rectify, &authoritativeInput, initialStepId);
 
-    rectifyAddAuthoritativeStep(&rectify, &transmuteInput, initialStepId);
+    AppSpecificParticipantInput predictedGameInput;
+    predictedGameInput.horizontalAxis = -1;
+
+    TransmuteInput predictedInput;
+    TransmuteParticipantInput predictedInputs[1];
+    predictedInputs[0].input = &predictedGameInput;
+    predictedInputs[0].octetSize = sizeof(predictedGameInput);
+    predictedInputs[0].participantId = 1;
+    predictedInputs[0].inputType = TransmuteParticipantInputTypeNormal;
+
+    predictedInput.participantInputs = predictedInputs;
+    predictedInput.participantCount = 1;
+
+    rectifyAddPredictedStep(&rectify, &predictedInput, initialStepId);
+    rectifyAddPredictedStep(&rectify, &predictedInput, initialStepId + 1);
+    const AppSpecificState* predicted = &appSpecificPredictedVm.appSpecificState;
+
+    ASSERT_EQ(0, predicted->x);
+    ASSERT_EQ(0, predicted->time);
+
+    rectifyUpdate(&rectify);
+
+    ASSERT_EQ(24-1, predicted->x);
+    ASSERT_EQ(2, predicted->time);
 
     /*
 

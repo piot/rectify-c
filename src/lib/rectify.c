@@ -5,14 +5,23 @@
 #include "imprint/allocator.h"
 #include <rectify/rectify.h>
 
-void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predictVm, RectifySetup setup,
-                 TransmuteState state, StepId stepId)
+void rectifyInit(Rectify* self, RectifyCallbackObject callbackObject, RectifySetup setup, TransmuteState state,
+                 StepId stepId)
 {
     self->log = setup.log;
     tc_snprintf(self->prefixAuthoritative, 32, "%s/Authoritative", setup.log.constantPrefix);
     Clog authSubLog;
     authSubLog.config = setup.log.config;
     authSubLog.constantPrefix = self->prefixAuthoritative;
+
+    AssentCallbackVtbl assentVtbl = {
+        .preTicksFn = callbackObject.vtbl->preAuthoritativeTicksFn,
+        .tickFn = callbackObject.vtbl->authoritativeTickFn,
+        .deserializeFn = callbackObject.vtbl->authoritativeDeserializeFn,
+    };
+    self->assentCallbackVtbl = assentVtbl;
+
+    const AssentCallbackObject assentCallbackObject = {.vtbl = &self->assentCallbackVtbl, .self = callbackObject.self};
 
     AssentSetup assentSetup;
     assentSetup.allocator = setup.allocator;
@@ -21,7 +30,16 @@ void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predict
     assentSetup.log = authSubLog;
     assentSetup.maxTicksPerRead = 20u;
 
-    assentInit(&self->authoritative, authoritativeVm, assentSetup, state, stepId);
+    assentInit(&self->authoritative, assentCallbackObject, assentSetup, state, stepId);
+
+    const SeerCallbackObjectVtbl seerVtbl = {
+        .predictionTickFn = callbackObject.vtbl->predictionTickFn,
+        .copyFromAuthoritativeFn = callbackObject.vtbl->copyFromAuthoritativeToPredictionFn,
+        .postPredictionTicksFn = callbackObject.vtbl->postPredictionTicksFn,
+    };
+
+    self->seerCallbackVtbl = seerVtbl;
+    const SeerCallbackObject seerCallbackObject = {.vtbl = &self->seerCallbackVtbl, .self = callbackObject.self};
 
     tc_snprintf(self->prefixPredicted, 32, "%s/Predict", setup.log.constantPrefix);
     Clog seerSubLog;
@@ -35,20 +53,17 @@ void rectifyInit(Rectify* self, TransmuteVm authoritativeVm, TransmuteVm predict
     seerSetup.maxTicksFromAuthoritative = setup.maxTicksFromAuthoritative;
     seerSetup.log = seerSubLog;
 
-    seerInit(&self->predicted, predictVm, seerSetup, state, stepId);
+    seerInit(&self->predicted, seerCallbackObject, seerSetup, stepId);
 
     CLOG_C_NOTICE(&self->log, "prepare memory for build composed max player count: %zu", setup.maxPlayerCount)
     self->buildComposedPredictedInput.participantInputs = IMPRINT_ALLOC_TYPE_COUNT(
         setup.allocator, TransmuteParticipantInput, setup.maxPlayerCount);
     self->buildComposedPredictedInput.participantCount = setup.maxPlayerCount;
+    self->authoritativeHasBeenCopiedToPrediction = false;
 }
 
 void rectifyUpdate(Rectify* self)
 {
-    if (!transmuteVmHasState(&self->authoritative.transmuteVm)) {
-        CLOG_C_NOTICE(&self->log, "authoritative state has not been set yet")
-        return;
-    }
 
     /*
     if (targetTickId < self->authoritative.stepId) {
@@ -81,18 +96,19 @@ void rectifyUpdate(Rectify* self)
     // Everytime we have consumed *all* the knowledge about the truth, we should update our predictions
     // or if we don't have any predictions at all, then it is time to set a prediction
     if (authoritativeStepCountBeforeUpdate > 0 && self->authoritative.authoritativeSteps.stepsCount == 0) {
-        StepId authoritativeTickId;
-        TransmuteState authoritativeTransmuteState = assentGetState(&self->authoritative, &authoritativeTickId);
-        CLOG_C_VERBOSE(
-            &self->log,
-            "we have a new truth at %04X, set it to seer (which was at %04X) and starts predicting our future",
-            authoritativeTickId, self->predicted.stepId)
+        CLOG_C_VERBOSE(&self->log,
+                       "we have a new authoritative state (truth) at %04X, copy to prediction (which was at %04X) and "
+                       "starts predicting our future",
+                       self->authoritative.stepId, self->predicted.stepId)
         // seerSetState discards all predicted inputs before the `authoritativeTickId`
-        seerSetState(&self->predicted, authoritativeTransmuteState, authoritativeTickId);
+        seerAuthoritativeGotNewState(&self->predicted, self->authoritative.stepId);
+        self->authoritativeHasBeenCopiedToPrediction = true;
     }
 
-    if (!self->predicted.transmuteVm.initialStateIsSet) {
-        CLOG_C_VERBOSE(&self->log, "we have not established a truth, waiting for that")
+    if (!self->authoritativeHasBeenCopiedToPrediction) {
+        CLOG_C_VERBOSE(
+            &self->log,
+            "we have not given a truth (authoritative state) to be able to predict the future, waiting for that")
         // We are not working on a prediction, so just return
         return;
     }
@@ -143,7 +159,7 @@ int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput,
 {
     if (predictedInput->participantCount > self->buildComposedPredictedInput.participantCount) {
         CLOG_C_SOFT_ERROR(&self->log, "more input than was prepared for predictedInput:%zu, buildComposed:%zu",
-                        predictedInput->participantCount, self->buildComposedPredictedInput.participantCount)
+                          predictedInput->participantCount, self->buildComposedPredictedInput.participantCount)
         return -1;
     }
 
@@ -154,20 +170,26 @@ int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput,
         int foundInPredicted = transmuteInputFindParticipantId(predictedInput, authoritativeParticipant->participantId);
         if (foundInPredicted < 0) {
             // Set zero input for remote participants
+            CLOG_C_VERBOSE(&self->log, "set null for remote participants")
             self->buildComposedPredictedInput.participantInputs[i].octetSize = 0;
             self->buildComposedPredictedInput.participantInputs[i].input = 0;
         } else {
-            self->buildComposedPredictedInput.participantInputs[i]
-                .octetSize = predictedInput->participantInputs[foundInPredicted].octetSize;
-            self->buildComposedPredictedInput.participantInputs[i]
-                .input = predictedInput->participantInputs[foundInPredicted].input;
+            TransmuteParticipantInput* participantInput = &predictedInput->participantInputs[foundInPredicted];
+            if (participantInput->input == 0 || participantInput->octetSize == 0) {
+                CLOG_C_ERROR(&self->log, "can not set empty participant input for prediction")
+            }
+
+            TransmuteParticipantInput* buildTarget = &self->buildComposedPredictedInput.participantInputs[i];
+            buildTarget->octetSize = participantInput->octetSize;
+            buildTarget->input = participantInput->input;
+            buildTarget->inputType = participantInput->inputType;
         }
     }
 
     for (size_t i = 0; i < predictedInput->participantCount; ++i) {
         const TransmuteParticipantInput* predictedParticipant = &predictedInput->participantInputs[i];
-        int foundInAuthoritative = transmuteInputFindParticipantId(&self->authoritative.lastTransmuteInput,
-                                                                   predictedParticipant->participantId);
+        const int foundInAuthoritative = transmuteInputFindParticipantId(&self->authoritative.lastTransmuteInput,
+                                                                         predictedParticipant->participantId);
         if (foundInAuthoritative < 0) {
             // It was not found in authoritative, we predict that we have joined then
             size_t index = self->buildComposedPredictedInput.participantCount++;
@@ -176,6 +198,7 @@ int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput,
             newParticipantInput->input = predictedParticipant->input;
             newParticipantInput->octetSize = predictedParticipant->octetSize;
             newParticipantInput->participantId = predictedParticipant->participantId;
+            newParticipantInput->inputType = predictedParticipant->inputType;
         }
     }
 
