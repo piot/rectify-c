@@ -173,6 +173,7 @@ int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput,
             CLOG_C_VERBOSE(&self->log, "set null for remote participants")
             self->buildComposedPredictedInput.participantInputs[i].octetSize = 0;
             self->buildComposedPredictedInput.participantInputs[i].input = 0;
+            self->buildComposedPredictedInput.participantInputs[i].inputType = TransmuteParticipantInputTypeNoInputInTime;
         } else {
             TransmuteParticipantInput* participantInput = &predictedInput->participantInputs[foundInPredicted];
             if (participantInput->input == 0 || participantInput->octetSize == 0) {
