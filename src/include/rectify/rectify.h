@@ -13,6 +13,7 @@ typedef struct RectifyCallbackObjectVtbl {
     AssentPreAuthoritativeTicksFn preAuthoritativeTicksFn;
     AssentAuthoritativeTickFn authoritativeTickFn;
     AssentDeserializeStateFn authoritativeDeserializeFn;
+    AssentAuthoritativeHashFn authoritativeHashFn;
 
     SeerPredictionCopyFromAuthoritativeFn copyFromAuthoritativeToPredictionFn;
     SeerPredictionTickFn predictionTickFn;

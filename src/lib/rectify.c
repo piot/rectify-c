@@ -18,6 +18,7 @@ void rectifyInit(Rectify* self, RectifyCallbackObject callbackObject, RectifySet
         .preTicksFn = callbackObject.vtbl->preAuthoritativeTicksFn,
         .tickFn = callbackObject.vtbl->authoritativeTickFn,
         .deserializeFn = callbackObject.vtbl->authoritativeDeserializeFn,
+        .hashFn = callbackObject.vtbl->authoritativeHashFn,
     };
     self->assentCallbackVtbl = assentVtbl;
 
@@ -167,42 +168,47 @@ int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput,
     const TransmuteInput* lastAuthoritativeInput = &self->authoritative.lastTransmuteInput;
     for (size_t i = 0; i < lastAuthoritativeInput->participantCount; ++i) {
         const TransmuteParticipantInput* authoritativeParticipant = &lastAuthoritativeInput->participantInputs[i];
+        TransmuteParticipantInput* buildTarget = &self->buildComposedPredictedInput.participantInputs[i];
         int foundInPredicted = transmuteInputFindParticipantId(predictedInput, authoritativeParticipant->participantId);
         if (foundInPredicted < 0) {
             // Set zero input for remote participants
             CLOG_C_VERBOSE(&self->log, "set null for remote participants")
-            self->buildComposedPredictedInput.participantInputs[i].octetSize = 0;
-            self->buildComposedPredictedInput.participantInputs[i].input = 0;
-            self->buildComposedPredictedInput.participantInputs[i].inputType = TransmuteParticipantInputTypeNoInputInTime;
+            buildTarget->octetSize = 0;
+            buildTarget->input = 0;
+            buildTarget->inputType = TransmuteParticipantInputTypeNoInputInTime;
         } else {
             TransmuteParticipantInput* participantInput = &predictedInput->participantInputs[foundInPredicted];
             if (participantInput->input == 0 || participantInput->octetSize == 0) {
                 CLOG_C_ERROR(&self->log, "can not set empty participant input for prediction")
             }
-
-            TransmuteParticipantInput* buildTarget = &self->buildComposedPredictedInput.participantInputs[i];
+            CLOG_ASSERT(participantInput->inputType == TransmuteParticipantInputTypeNormal,
+                        "local participants must be of normal type")
             buildTarget->octetSize = participantInput->octetSize;
+            CLOG_ASSERT(participantInput->input != 0,
+                        "local participants must have a valid input pointer")
             buildTarget->input = participantInput->input;
-            buildTarget->inputType = participantInput->inputType;
+            buildTarget->inputType = TransmuteParticipantInputTypeNormal;
         }
     }
 
-    for (size_t i = 0; i < predictedInput->participantCount; ++i) {
-        const TransmuteParticipantInput* predictedParticipant = &predictedInput->participantInputs[i];
-        const int foundInAuthoritative = transmuteInputFindParticipantId(&self->authoritative.lastTransmuteInput,
-                                                                         predictedParticipant->participantId);
-        if (foundInAuthoritative < 0) {
-            // It was not found in authoritative, we predict that we have joined then
-            size_t index = self->buildComposedPredictedInput.participantCount++;
-            TransmuteParticipantInput* newParticipantInput = &self->buildComposedPredictedInput
-                                                                  .participantInputs[index];
-            newParticipantInput->input = predictedParticipant->input;
-            newParticipantInput->octetSize = predictedParticipant->octetSize;
-            newParticipantInput->participantId = predictedParticipant->participantId;
-            newParticipantInput->inputType = predictedParticipant->inputType;
+    /* TODO: Check if this code is correct, but ignore it for now
+        for (size_t i = 0; i < predictedInput->participantCount; ++i) {
+            const TransmuteParticipantInput* predictedParticipant = &predictedInput->participantInputs[i];
+            const int foundInAuthoritative = transmuteInputFindParticipantId(&self->authoritative.lastTransmuteInput,
+                                                                             predictedParticipant->participantId);
+            if (foundInAuthoritative < 0) {
+                // It was not found in authoritative, we predict that we have joined then
+                size_t index = self->buildComposedPredictedInput.participantCount++;
+                TransmuteParticipantInput* newParticipantInput = &self->buildComposedPredictedInput
+                                                                      .participantInputs[index];
+                newParticipantInput->input = predictedParticipant->input;
+                newParticipantInput->octetSize = predictedParticipant->octetSize;
+                newParticipantInput->participantId = predictedParticipant->participantId;
+                newParticipantInput->inputType = predictedParticipant->inputType;
+            }
         }
-    }
 
+    */
     if (self->buildComposedPredictedInput.participantCount == 0) {
         CLOG_C_NOTICE(&self->log, "can not predict yet, need to get some authoritative first")
         return 0;
