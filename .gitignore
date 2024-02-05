@@ -14,3 +14,5 @@ Makefile
 CMakeCache.txt
 src/test/rectify_test
 src/temp.zip
+cmake_install.cmake
+CTestTestfile.cmake
