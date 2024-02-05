@@ -82,14 +82,14 @@ typedef struct AppSpecificCallback {
     TransmuteState cachedState;
 } AppSpecificCallback;
 
-void rectifyAuthoritativeDeserialize(void* _self, const TransmuteState* state)
+void rectifyAuthoritativeDeserialize(void* _self, const TransmuteState* state, StepId stepId)
 {
     AppSpecificCallback* self = (AppSpecificCallback*) _self;
     CLOG_INFO("deserialize into authoritative")
     transmuteVmSetState(self->authoritative, state);
 }
 
-void rectifyAuthoritativeTick(void* _self, const TransmuteInput* input)
+void rectifyAuthoritativeTick(void* _self, const TransmuteInput* input, StepId stepId)
 {
     AppSpecificCallback* self = (AppSpecificCallback*) _self;
     CLOG_INFO("authoritative: tick")
@@ -106,7 +106,7 @@ void rectifyCopyAuthoritative(void* _self, StepId stepId)
     transmuteVmSetState(self->predicted, &self->cachedState );
 }
 
-void rectifyPredictionTick(void* _self, const TransmuteInput* input)
+void rectifyPredictionTick(void* _self, const TransmuteInput* input, StepId stepId)
 {
     AppSpecificCallback* self = (AppSpecificCallback*) _self;
     CLOG_INFO("predicted: tick")
