@@ -82,12 +82,16 @@ typedef struct AppSpecificCallback {
     TransmuteState cachedState;
 } AppSpecificCallback;
 
+
+
 void rectifyAuthoritativeDeserialize(void* _self, const TransmuteState* state, StepId stepId)
 {
     AppSpecificCallback* self = (AppSpecificCallback*) _self;
-    CLOG_INFO("deserialize into authoritative")
+    CLOG_DEBUG("deserialize into authoritative %zu", state->octetSize)
     transmuteVmSetState(self->authoritative, state);
 }
+
+
 
 void rectifyAuthoritativeTick(void* _self, const TransmuteInput* input, StepId stepId)
 {
@@ -95,6 +99,15 @@ void rectifyAuthoritativeTick(void* _self, const TransmuteInput* input, StepId s
     CLOG_INFO("authoritative: tick")
 
     transmuteVmTick(self->authoritative, input);
+}
+
+
+uint64_t rectifyAuthoritativeHashFn(void* _self)
+{
+    AppSpecificCallback* self = (AppSpecificCallback*) _self;
+    CLOG_INFO("authoritative: hashFn")
+
+    return 0;
 }
 
 void rectifyCopyAuthoritative(void* _self, StepId stepId)
@@ -105,6 +118,7 @@ void rectifyCopyAuthoritative(void* _self, StepId stepId)
 
     transmuteVmSetState(self->predicted, &self->cachedState );
 }
+
 
 void rectifyPredictionTick(void* _self, const TransmuteInput* input, StepId stepId)
 {
@@ -183,11 +197,15 @@ UTEST(Rectify, verify)
     RectifyCallbackObjectVtbl vtbl = {
         .authoritativeDeserializeFn = rectifyAuthoritativeDeserialize,
         .authoritativeTickFn = rectifyAuthoritativeTick,
+        .authoritativeHashFn = rectifyAuthoritativeHashFn,
         .predictionTickFn = rectifyPredictionTick,
         .postPredictionTicksFn = rectifyPostPredictionTick,
         .preAuthoritativeTicksFn = rectifyAuthoritativePreTicks,
         .copyFromAuthoritativeToPredictionFn = rectifyCopyAuthoritative,
     };
+
+    const AppSpecificState* authoritative = &appSpecificAuthoritativeVm.appSpecificState;
+    const AppSpecificState* predicted = &appSpecificPredictedVm.appSpecificState;
 
     RectifyCallbackObject rectifyCallbackObject = {.vtbl = &vtbl, .self = &appCallback};
 
@@ -199,7 +217,14 @@ UTEST(Rectify, verify)
     rectifySetup.log = subLog;
     rectifyInit(&rectify, rectifyCallbackObject, rectifySetup, initialTransmuteState, initialStepId);
 
+    ASSERT_EQ(0, predicted->time);
+    ASSERT_EQ(0, authoritative->time);
+
+    CLOG_INFO("update first, should not change anything")
     rectifyUpdate(&rectify);
+
+    ASSERT_EQ(0, authoritative->time);
+    ASSERT_EQ(0, predicted->time);
 
     AppSpecificParticipantInput authoritativeGameInput;
     authoritativeGameInput.horizontalAxis = 24;
@@ -216,6 +241,13 @@ UTEST(Rectify, verify)
 
     rectifyAddAuthoritativeStep(&rectify, &authoritativeInput, initialStepId);
 
+    ASSERT_EQ(0, authoritative->x);
+    ASSERT_EQ(0, predicted->x);
+
+    CLOG_INFO("update second, should only move authoritative")
+        rectifyUpdate(&rectify);
+
+
     AppSpecificParticipantInput predictedGameInput;
     predictedGameInput.horizontalAxis = -1;
 
@@ -231,15 +263,22 @@ UTEST(Rectify, verify)
 
     rectifyAddPredictedStep(&rectify, &predictedInput, initialStepId);
     rectifyAddPredictedStep(&rectify, &predictedInput, initialStepId + 1);
-    const AppSpecificState* predicted = &appSpecificPredictedVm.appSpecificState;
+    rectifyAddPredictedStep(&rectify, &predictedInput, initialStepId + 2);
 
-    ASSERT_EQ(0, predicted->x);
-    ASSERT_EQ(0, predicted->time);
+    ASSERT_EQ(24, predicted->x);
+    ASSERT_EQ(1, predicted->time);
+    ASSERT_EQ(24, authoritative->x);
+
+    CLOG_INFO("update again, should advance predicted, but not authoritative")
 
     rectifyUpdate(&rectify);
 
-    ASSERT_EQ(24-1, predicted->x);
-    ASSERT_EQ(2, predicted->time);
+    ASSERT_EQ(24, authoritative->x);
+    ASSERT_EQ(1, authoritative->time);
+
+    ASSERT_EQ(24-2, predicted->x);
+    ASSERT_EQ(3, predicted->time);
+
 
     /*
 

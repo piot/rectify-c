@@ -14,6 +14,7 @@ UTEST_STATE();
 int main(int argc, const char* const argv[])
 {
     g_clog.log = clog_console;
+    g_clog.level = CLOG_TYPE_VERBOSE;
     CLOG_INFO("tests are running")
     return utest_main(argc, argv);
 }
