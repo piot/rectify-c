@@ -59,13 +59,13 @@ void rectifyInit(Rectify* self, RectifyCallbackObject callbackObject, RectifySet
     CLOG_C_DEBUG(&self->log, "prepare memory for build composed max player count: %zu", setup.maxPlayerCount)
     self->buildComposedPredictedInput.participantInputs = IMPRINT_ALLOC_TYPE_COUNT(
         setup.allocator, TransmuteParticipantInput, setup.maxPlayerCount);
-    self->buildComposedPredictedInput.participantCount = setup.maxPlayerCount;
+    self->buildComposedPredictedInput.participantCount = 0;
+    self->buildComposedPredictedInputMaxParticipantCount = setup.maxPlayerCount;
     self->authoritativeHasBeenCopiedToPrediction = false;
 }
 
 void rectifyUpdate(Rectify* self)
 {
-
     /*
     if (targetTickId < self->authoritative.stepId) {
         CLOG_C_ERROR(&self->log,
@@ -158,17 +158,17 @@ bool rectifyMustAddPredictedStepThisTick(const Rectify* self)
 
 int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput, StepId tickId)
 {
-    if (predictedInput->participantCount > self->buildComposedPredictedInput.participantCount) {
-       // CLOG_C_SOFT_ERROR(&self->log, "more input than was prepared for predictedInput:%zu, buildComposed:%zu",
-         //                 predictedInput->participantCount, self->buildComposedPredictedInput.participantCount)
-        return -1;
+    if (predictedInput->participantCount > self->buildComposedPredictedInputMaxParticipantCount) {
+        CLOG_C_ERROR(&self->log, "more input than was prepared for predictedInput:%zu, buildComposed:%zu",
+                     predictedInput->participantCount, self->buildComposedPredictedInputMaxParticipantCount)
+        // return -1;
     }
 
-    self->buildComposedPredictedInput = self->authoritative.lastTransmuteInput;
     const TransmuteInput* lastAuthoritativeInput = &self->authoritative.lastTransmuteInput;
     for (size_t i = 0; i < lastAuthoritativeInput->participantCount; ++i) {
         const TransmuteParticipantInput* authoritativeParticipant = &lastAuthoritativeInput->participantInputs[i];
         TransmuteParticipantInput* buildTarget = &self->buildComposedPredictedInput.participantInputs[i];
+        buildTarget->participantId = authoritativeParticipant->participantId;
         int foundInPredicted = transmuteInputFindParticipantId(predictedInput, authoritativeParticipant->participantId);
         if (foundInPredicted < 0) {
             // Set zero input for remote participants
@@ -184,12 +184,12 @@ int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput,
             CLOG_ASSERT(participantInput->inputType == TransmuteParticipantInputTypeNormal,
                         "local participants must be of normal type")
             buildTarget->octetSize = participantInput->octetSize;
-            CLOG_ASSERT(participantInput->input != 0,
-                        "local participants must have a valid input pointer")
+            CLOG_ASSERT(participantInput->input != 0, "local participants must have a valid input pointer")
             buildTarget->input = participantInput->input;
             buildTarget->inputType = TransmuteParticipantInputTypeNormal;
         }
     }
+    self->buildComposedPredictedInput.participantCount = self->authoritative.lastTransmuteInput.participantCount;
 
     /* TODO: Check if this code is correct, but ignore it for now
         for (size_t i = 0; i < predictedInput->participantCount; ++i) {
@@ -210,8 +210,8 @@ int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput,
 
     */
     if (self->buildComposedPredictedInput.participantCount == 0) {
-        CLOG_C_NOTICE(&self->log, "can not predict yet, need to get some authoritative first")
-        return 0;
+        CLOG_C_NOTICE(&self->log, "can not predict yet, need to get some authoritative first. tickID: %08X", tickId)
+        //return 0;
     }
 
     return seerAddPredictedStep(&self->predicted, &self->buildComposedPredictedInput, tickId);

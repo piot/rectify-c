@@ -31,6 +31,7 @@ typedef struct Rectify {
     Seer predicted;
     Assent authoritative;
     TransmuteInput buildComposedPredictedInput;
+    size_t buildComposedPredictedInputMaxParticipantCount;
     Clog log;
     char prefixAuthoritative[32];
     char prefixPredicted[32];
