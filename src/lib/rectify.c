@@ -172,7 +172,7 @@ int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput,
         int foundInPredicted = transmuteInputFindParticipantId(predictedInput, authoritativeParticipant->participantId);
         if (foundInPredicted < 0) {
             // Set zero input for remote participants
-            CLOG_C_VERBOSE(&self->log, "set null for remote participants")
+            //CLOG_C_VERBOSE(&self->log, "set null for remote participants")
             buildTarget->octetSize = 0;
             buildTarget->input = 0;
             buildTarget->inputType = TransmuteParticipantInputTypeNoInputInTime;
