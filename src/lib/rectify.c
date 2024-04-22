@@ -169,6 +169,7 @@ int rectifyAddPredictedStep(Rectify* self, const TransmuteInput* predictedInput,
         const TransmuteParticipantInput* authoritativeParticipant = &lastAuthoritativeInput->participantInputs[i];
         TransmuteParticipantInput* buildTarget = &self->buildComposedPredictedInput.participantInputs[i];
         buildTarget->participantId = authoritativeParticipant->participantId;
+        buildTarget->localPartyId = 0; // localPartyId is not used in prediction
         int foundInPredicted = transmuteInputFindParticipantId(predictedInput, authoritativeParticipant->participantId);
         if (foundInPredicted < 0) {
             // Set zero input for remote participants
