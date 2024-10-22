@@ -301,7 +301,7 @@ UTEST(Rectify, verify)
 
         uint8_t stepBuf[64];
 
-        int octetLength = nbsStepsOutSerializeStep(&data, stepBuf, 64);
+        int octetLength = nbsStepsOutSerializeCombinedStep(&data, stepBuf, 64);
         if (octetLength < 0) {
             CLOG_ERROR("not working")
         }
